@@ -1,0 +1,630 @@
+---
+title: "Pattern of Stop, Question, and Frisk in NYC"
+author: "Name: Nene Yamasaki"
+Student number: "20112963"
+date: "`r format(Sys.time(), '%X, %d %B, %Y')`"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: sentence
+---
+
+# Originality declaration
+
+I, Nene Yamasaki, confirm that the work presented in this assessment is my own.
+Where information has been derived from other sources, I confirm that this has been indicated in the work.
+
+date: `r format(Sys.time(), '%d %B, %Y')`
+
+# Initial project scope
+
+## Research question and justifications
+
+\<Do incidents of 'stop, question, and frisk' that were self-initiated by police officers without sufficient evidence for an arrest exhibit any attribute and spatial patterns in NYC in 2019, and if so, what could be the potential reasons?>
+
+-   New York City ultimately wishes to review their stop, question and frisk (SQF) policy, and this analysis is the first step: understanding the patterns for the occurrence of SQF. The results from this analysis will be the basis of the future investigations where further analyses on the reasons behind any identified biased/ clustered SQF patterns as well as potential resolutions will be identified.
+-   As such, the research question focuses on data from *2019*, as this is the year with the latest information without the impact of COVID-19 (<https://www.investopedia.com/historical-timeline-of-covid-19-in-new-york-city-5071986>). As COVID-19 impacts people's behavior therefore the encounter patterns with the police officers, data from 2020 onward are not representative of the SQF patterns in the future, assuming that the pandemic will resolve shortly.
+-   SQF is type of encounters with the police officers, where police officers stop the citizens and frisk/ question. The rule is "in accordance with New York State law" (<https://www1.nyc.gov/site/ccrb/investigations/stop-question-and-frisk.page>), rather than local police district. It is important for the New York Police Department to uncover any unusual patterns in SQF especially ones that span across policing districts.
+-   The SQF policy is critical in fair criminal justice (<https://dc.law.utah.edu/cgi/viewcontent.cgi?article=1216&context=scholarship>) - the society is calling for reform especially after the George Floyd case.
+-   With a focus on police bias, this analysis specifically focus on cases that were self-initiated the police officer where no arrest was made, assuming that those that did not lead to arrests were likely mistake ("unnecessary SQF"). This assumption may need to be evaluated in the future.
+-   It can be hypothesized that the SQF incidences initiated by the police officer on site themselves by 'mistake' would exhibit clustering patterns. This analysis focuses on revealing the patten first and foremost, and then touches upon what could be causing the patterns purely based on data/ geographic observations. NYPD is advised to conduct appropriate interviews etc. to verify what are revealed by data before reflecting on reviewed SQF policies.
+
+## Evaluation of the main data sets
+
+I. Shapefile of NYC with police district boundaries
+
+-   The shapefile contains the police district boundaries of New York
+
+-   There are 77 spatial units, and they are located across the sea - some are in individual islands.
+    This is an important information about the geography, as some 'neighboring' spatial units may not be landlocked in the following analysis, whose implication needs to be discussed after the analysis.
+    (checked on QGIS and google maps)
+
+-   The data are in WGS83
+
+II\. SQF data of NYC
+
+-   Each row represents the occurrence of SQF, as can be seen from stop ID. There are almost 13500 cases recorded, without any missing ID from the data.
+-   The columns "Stop location x" and "stop location y" allows the identification of the points in space, where the coordinates are given in NAD83 in ft (EPSG 2908)
+-   "Stop was initiated" column to be used to filter the officer self-initiated cases to analyse
+-   "Suspect arrested flag" column to be used to filter the cases where citizens were stopped without enough evidence for an arrest
+-   "Suspect race description" to be used to identify whether there was discrepancy in unnecessary SQF across races
+-   More information is present including time of the day and suspect characteristics. These can in the future used to conduct more targeted analyses
+
+## Data wrangling and analysis overview
+
+This section outlines the main components of the data wrangling and analysis with the rationale for using those methods.
+More codes/ details to be found in the main sections.
+
+\<Data wrangling>
+
+1.  Reading and pre-processing data
+
+    I. Shapefile
+
+    -   Read in with st_read()
+
+    -   Transform to NYC local CRS in meters, NAD83
+
+    II\. SQF data from 2019
+
+    -   Read in with read_excel()
+
+    -   Though the each data entry looks distinct, include distinct() just in case
+
+    -   Filter data based on how stop was initiated and whether it led to an arrest
+
+    -   Convert the data to a sf object using st_as_sf().
+        The initial coordinates are given in EPSG 2908, which is NAD83 in feet
+
+    -   Transform to NYC local CRS in meters, NAD83
+
+Merging and exploring data
+
+-   Spatially join the SQF data set to the shapefile with st_join()
+
+-   Explore whether there are significant skew in suspect characteristics with bar chart (ggplot) - use race as an example here
+
+-   For each entry, find the area of the police district and find the density of unnecessary SQF in terms of area.
+    This may not best represent the frequent occurrence of unnecessary SQF due to some areas having more residents/ visitors and more police officers, which should be taken into account in the future by normalising the unnecessary SQF by other measures (e.g. unnecessary SQF/ overall SQF would be a good measure to see how 'accurate' the SQF act is in that police district.)
+
+-   Summarise above data for each of the 77 policing districts.
+
+\<Analysis>
+
+3.  Spatial autocorrelation in NYC across police districts
+
+    -   First, further process the merged data from #2 above to set up for Moran's I and Getis-Ord General G analysis.
+        This includes finding the centroids, finding the neighbours (use queen's, as whether the units are spatially connected are the critical element in this analysis), finding the weight matrix.
+        For weight matrix, use row standardisation - ArcGIS recommends row standardisation "almost always" for neighbourhoods based on polygon contiguity to mitigate bias due to different numbers of neighbours listed for each spatial unit (<https://pro.arcgis.com/en/pro-app/latest/tool-reference/spatial-statistics/modeling-spatial-relationships.htm#:~:text=Row%20standardization%20is%20recommended%20whenever,weights%20of%20all%20neighboring%20features>.)).
+
+    -   Conduct global Moran's I and global G to measure the degree of spatial autocorrelation and whether high density areas are clustering
+
+    -   Conduct local Moran's I and local G to identify the spatial units with high density of SQF
+
+4.  Point pattern analysis
+
+    -   Once certain districts with high density of SQF have been identified from local Moran's I and local G analysis, deep dive into those areas.
+        The aim is to find out their clustering patterns - do they tend to locate on the same street?
+        Around a river?
+        Near the same park?
+
+    -   Select a borough using filter() on shapefile
+
+    -   Spatially subset the SQF data
+
+    -   Convert the data to a ppp object (sf -> sp -> ppp) for spatstat package
+
+    -   KDE visualisation to have a quick glance on the clustering tendency
+
+    -   Ripley's K to determine the scale at which clustering may be occuring
+
+    -   KNN distplot to double-check the clustering scale
+
+    -   DBSCAN to identify clusters
+
+    -   Visualise clusters on OSM to identify geographical features common near clusters
+
+## Potential limitations of the analysis
+
+-   Limitations on policy usefulness
+
+    -   This analysis dives into looking at SQF cases that are self-initiated and did not result in an arrest, assuming that this was an 'unnecessary' SQF.
+        However, before this can be made use for policy improvement, it is necessary to also understand the context of 'unnecessary' SQF (e.g. does the unnecessary SQF occur around similar rate across, then it is an unavoidable part of crime prevention; do the 'unnecessary' SQF in fact necessary, as these could have stopped further crimes from developing/ deter some criminals).
+
+    -   It is also necessary to understand factors not considered here, before the results can be useful to policy makers.
+        This includes other characteristics of the area (e.g. baseline crime level of the areas)
+
+-   Limitations of the analysis methods (due to time constraints)
+
+    -   This analysis chooses a deep-dive study area based on the number of 'unnecessary' SQF/ area.
+        However, this may not be the best metric as some areas have more residents, visitors, and police officers, which would naturally lead to more SQF and more 'unnecessary' SQF.
+        Consider normalising data with other metrics in the future
+
+    -   This analysis looks at skew in terms of suspect demographics and spatial patterns independently.
+        Combining these two aspects of 'unnecessary' SQF would reveal more in terms of police bias.
+
+    -   More targeted analyses would benefit the policy review in the future, especially and current analysis includes all crime types, etc.
+
+    -   In addition, other initiation methodology (by radio, etc.) should be reviewed in a similar way to this, which may reveal similar or different clustering/ bias patterns.
+
+```{r loading_packages}
+library(tidyverse)
+library(tmap)
+library(geojsonio)
+library(plotly)
+library(rgdal)
+library(broom)
+library(terra)
+library(mapview)
+library(crosstalk)
+library(sf)
+library(sp)
+library(spdep)
+library(car)
+library(fs)
+library(janitor)
+library(tidypredict)
+library(spgwr)
+library(RColorBrewer)
+library(spatstat)
+library(OpenStreetMap)
+library(grid)
+library(ggplot2)
+library(readxl)
+```
+
+# 1. Reading and pre-processing data
+
+I. Reading in the shapefile and pre-processing
+
+```{r load_shapefile, echo=TRUE, message=FALSE, warning=FALSE}
+#Read in the police district shapefile, clean the column names, and transform to NAD83 (m)
+shape <- st_read(here::here("Data", "Police Precincts", "geo_export_82aec3fb-df9c-4d2d-bb18-ec6a428361f0.shp")) %>% 
+  clean_names() %>%
+  st_transform(., 32118) #NAD83 / New York Long Island
+
+#Visualise the data to check
+tmap_mode("plot")
+qtm(shape)
+```
+
+The map here looks exactly as seen on QGIS and google maps.
+The data are read in correctly, so proceed with the analysis.
+
+II. Reading in the SQF data and pre-processing Here, the data are selected by what initiated the SQF, as the first focus of the analysis.
+
+```{r load_SQFdata, echo=TRUE, message=FALSE, warning=FALSE}
+#Reading in the data and cleaning the column names
+sqf <- read_excel(here::here("Data", "sqf-2019.xlsx"), na = "") %>%
+  clean_names() %>%
+  distinct()
+
+#Filter data based on who initiated the stop - focus this time on officer self-initiation where no arrest was made (citizens were held by mistake)
+sqf_initiator <- sqf %>%
+  filter(str_detect(stop_was_initiated, "Based on Self Initiated")) %>%
+  filter(str_detect(suspect_arrested_flag, "N")) #2193 data points
+
+#There is no stop_location_x and stop_location y missing, so use these to convert to sf object
+sqf_initiator_sf <- sqf_initiator %>%
+  st_as_sf(., coords = c("stop_location_x", "stop_location_y"), crs = 2908) %>% #NAD83 in ft
+   st_transform(., 32118) #NAD83 in m
+
+#Visualise the data to check
+qtm(sqf_initiator_sf)
+```
+
+Now, to ensure that both data are read correctly, visualise both data together:
+
+```{r check_data, echo=TRUE, message=FALSE, warning=FALSE}
+#Plot the shapefile and the sqf data toghether
+tmap_mode("plot")
+tm_shape(shape) +
+  tm_polygons(col = NA, alpha = 0.5) +
+tm_shape(sqf_initiator_sf) +
+  tm_dots(col = "red")
+```
+
+The visualisation of the boundaries and the SQF data together show that the data are read in correctly.
+The plot also shows that sqf data points under investigation are mainly located in the top island and the center of the middle island, which indicates that it is likely there are spatial autocorrelation.
+
+# 2. Merging and exploring data
+
+The two processed data sets are merged using spatial join.
+The joined data will be called the "master_data" from now on (sf object unless stated at the end of the variable name), and will contain all the important analysis information associated with each police district.
+
+```{r data_merging, echo=TRUE, message=FALSE, warning=FALSE}
+#Left join to shape
+ master_data_list <- shape  %>%
+  st_join(., sqf_initiator_sf) %>% #left join by default
+  add_count(precinct) %>% #counting the number of entries = number of cases per precinct
+  mutate(area = st_area(.)) %>% #compute the precinct area
+  mutate(density = n/area) #normalise the data by area - this may be better to be done by population in the future
+
+#To understand the context, what would be the racial split of these cases?
+ggbar<- ggplot(master_data_list, aes(x=suspect_race_description))+
+  geom_bar()+
+  labs(title = "Self-initiated and non-arrest SQF cases - ratial breakdown", x = "Race", y = "Number of cases")
+ggbar
+
+#Summarise the data by precinct and only keep necessary data for the analyses going forward
+master_data <- master_data_list %>%
+  group_by(precinct) %>%
+  summarise(precinct = first(precinct),
+            count= first(n),
+            density = first(density))
+
+#plot to check the master data ready for the analyses
+tmap_mode("view")
+tm_density <- tm_shape(master_data) +
+    tm_polygons("density",
+        style="jenks",
+        palette="PuBu",
+        midpoint=NA,
+        popup.vars=c("precinct", "density"),
+        title="Cases of self-initiated and non-arrested SQF (#/m^2)")
+tm_density
+```
+
+Ratial breakdown of the officer self-initiated non-arrest SQF cases show that the majority of the cases are with black citizens.
+This poses a question on if police officers self-initiating to SQF citizens may be biased largely by their race.
+With this information in mind, this analysis then moves onto testing whether the SQF cases are autocorrelated across police districts, and whether each of the incidents are clustered.
+
+# 3. Spatial autocorrelation in NYC across police districts
+
+The first step is to investigate whether the spatial density (#cases/ area) of the self-initiated and non-arrested cases are spatially autocorrelated across NYC.
+Moran's I and Gettis Ord general G will be used to analyse this.
+
+```{r autocorrelation_stat_prep, echo=TRUE, message=FALSE, warning=FALSE}
+#a. compute the location of centroid
+centroids <- master_data %>%
+  st_centroid() %>%
+  st_geometry()
+
+#b. creating neighbours list
+neighbours <- master_data %>%
+  poly2nb(., queen=T) #Use queen's case rather than k nearest neighbors, as comparing with adjacent spacial unit is important, not only the top k closest neighbours
+
+#c. visualising the neighbours list
+plot(neighbours, st_geometry(centroids), col="red")
+plot(master_data$geometry, add = T)
+
+#d. creating a spatial weight matrix
+weight_matrix <- neighbours %>%
+  nb2listw(., style = "W", zero.policy = TRUE) #Use row standardization - recommended for queen's case by ArcGIS
+zero.policy = TRUE #island disconnection exists
+```
+
+Note that the neighbors list are created based on centroids locations.
+The visualisation shows that some poice districts across the sea are considered to be neighbors, but this is not accurate as it is likely there is a step change across the sea.
+The neighbours list and spatial weight matrix need to be adjusted in the future with this considerations.
+
+Here are quick global test results to see how highly clustered those data are:
+
+```{r autocorrelation_global, echo=TRUE, message=FALSE, warning=FALSE}
+#Compute the Moran's I global statistic
+moran_g <- master_data %>%
+  pull(density) %>%
+  as.vector()%>%
+  moran.test(., weight_matrix)
+moran_g #0.33 -> high autocorrelation
+
+#Compute the Getis Ord general G global statistic
+general_g <- master_data %>%
+  pull(density) %>%
+  as.vector()%>%
+  globalG.test(., weight_matrix)
+general_g #global G statistic = 2.06e-2 > expectation (1.32e-2) -> high density values are autocorrelated
+```
+
+As Moran's I value is considerably larger than 0, it shows that density values of each police district exhibit autocorrelation.
+This suggests that SQF cases under investigation may be clustered around some areas, as hypothesized.
+Getis Ord Genral G results show that the statistic is above the expected value, so higher density areas are tending to cluster.
+This confirms the hypothesis that cases under investigation exhibit clustering behaviours.
+
+To identify where these hotspots may be occurring, compute local Moran's I and local Getis Ord statistics:
+
+```{r autocorrelation_local_I, echo=TRUE, message=FALSE, warning=FALSE}
+#a. run local Moran's I
+moran_l <- master_data %>%
+  pull(density) %>%
+  as.vector() %>%
+  localmoran(., weight_matrix) %>%
+  as_tibble()
+
+#b. combine this data with the master data - choose the z score to to visualise, as z score can allow identification of how unlikely it is to get the value if null hypothesis of random distribution is true 
+master_data <- master_data %>%
+  mutate(density_Iz = as.numeric(moran_l$Z.Ii))
+
+#c. visualise local Moran's I
+#break based on one tail p-value - 99%: 2.58, 95%: 1.96, 90%: 1.65
+breaks = c(-1000, -2.58, -1.96, -1.65, 1.65, 1.96, 2.58, 1000)
+MoranColours <- rev(brewer.pal(8, "RdGy"))
+
+tm_Moran <- tm_shape(master_data)+
+  tm_polygons("density_Iz", style = "fixed", breaks = breaks, 
+              palette = MoranColours, midpoint=NA, title = "Z value for Moran's I - SQF")
+tm_Moran
+```
+
+The output graph shows that significant autocorrelation is occurring near the center of the top segment of NYC connected to the mainland, and some at the east-central site of the bottom left island.
+
+Now, conduct a similar analysis with Getis Ord statistic and see which areas have autocorrelation of high density values and which with low density values:
+
+```{r autocorrelation_local_G, echo=TRUE, message=FALSE, warning=FALSE}
+#a. run local G
+general_l <- master_data %>%
+  pull(density) %>%
+  as.vector() %>%
+  localG(., weight_matrix)
+
+#b. combine this data with the master data - choose the z score to to visualise, as z score can allow identification of how unlikely it is to get the value if null hypothesis of random distribution is true 
+master_data <- master_data %>%
+  mutate(density_Gz = as.numeric(general_l))
+
+#c. visualise local General G
+#break based on one tail p-value - 99%: 2.58, 95%: 1.96, 90%: 1.65
+GeneralColours <- rev(brewer.pal(8, "RdBu"))
+
+tm_general <- tm_shape(master_data)+
+  tm_polygons("density_Gz", style = "fixed", breaks = breaks, 
+              palette = GeneralColours, midpoint=NA, title = "Z value for general G - SQF")
+tm_general
+```
+
+The output graph shows that the high density values are autocorrelated at the top and low values are autocorrelated at the bottom left.
+
+Showing the maps side-by side:
+
+```{r autocorrelation_visualisation, echo=TRUE, message=FALSE, warning=FALSE}
+#Look at both maps side-by-side
+tmap_arrange(tm_Moran, tm_general, ncol=2)
+```
+
+The two maps (Moran's I and general G) show that: i.
+There are 2 spatial units that are hot spot of SQF under investigation with very low p-value (below 1%), which are precinct 25 and 28.
+Precinct 25 spans across the sea into a small island, but assume the impact of this is small for this analysis ii.
+Precinct 19 and 23 have high density of SQF under investigation at the significance level of 5% iii.
+Precinct 22 has significantly low Moran's I value, showing that this district has very low value compared to the neighbours (<https://mgimond.github.io/Spatial/spatial-autocorrelation.html>).
+The value of Getis Ord for this district is high, as many of the neighbouring units have high density of SQF under investigation.
+vi.
+Precinct 103, 107, 110 has autocorrelation of low density values.
+These areas could be investigated in the future to see how they are keeping SQF without arrest by self-initiation less frequent - this could help come up with how to reduce false accusations, but this could also be related to more of the actual criminals not getting arrested, which needs to be looked into.
+(Or alternatively, this could be because of less inhabitants/ area.)
+
+Going forward, precinct 19, 22, 23, 25, 28 (hot spot area) are selected as the study area to explore the clustering patterns.
+Precinct 22 is included to make the study area closer to a rectangle, for convenience.
+
+# 4. Point pattern analysis for the selected location
+
+To tackle hot spot areas of more-likely-to-be-false accusations by self-initiated police officers in specific, this study will now deep dive into the area near precinct 19, 22, 23, 25, 28 to conduct point pattern analysis.
+The aim is to find out whether/ how the SQF cases under investigation are clustered within these hot spot areas.
+
+First, set up the environment for point pattern analysis:
+
+```{r point_analysis_setup, echo=TRUE, message=FALSE, warning=FALSE}
+#First, filter the study area in shapefile to be the hot spot area identified in #3
+master_data_subset <- master_data %>%
+  filter(precinct %in% c(1, 5, 6, 7, 9, 10, 13, 14, 17, 18, 19, 20, 22, 23, 24, 25, 26, 28, 30, 32, 33, 34)) #all districts that are land-locked around the identified hot spot
+
+#Extract the sqf points under investigation in the study area
+sqf_initiator_subset <- sqf_initiator_sf[master_data_subset,] #spatial subset
+
+
+#Visualise
+tm_shape(master_data_subset)+
+  tm_polygons(col=NA)+
+  tm_shape(sqf_initiator_subset)+
+  tm_dots(col="red") #precinct 22 has only a few points (as expected) and the island of precinct 25 none. Keep these spacial units in the analysis anyway, as these should not interfere with the clustering analysis
+
+#Setup an analysis window to the subsetted hotspot area
+window <- as.owin(master_data_subset)
+plot(window) # window created correctly
+
+#Creating a ppp object for the sqf points under investigation for the spatstat package to work on
+sqf_subset_sp <- sqf_initiator_subset %>%
+  as(., "Spatial") #221 data points
+sqf_subset_ppp <- ppp(x = sqf_subset_sp@coords[,1], y = sqf_subset_sp@coords[,2],
+                           window = window) #gives duplicated points warding based on coordinates, but SQF entries are all distinct as checked. Therefore, proceed without removing points here
+
+#Visualise the deep dive study area
+sqf_subset_ppp %>%
+  plot(., pch=16, cex=0.5, main="SQF points under investigation for point pattern analysis")
+```
+
+Quick visualisation of the trend over the area with KDE:
+
+```{r KDE, echo=TRUE, message=FALSE, warning=FALSE}
+sqf_subset_ppp %>% 
+  density(., sigma=500) %>% #arbitrarily choose sigma=500
+  plot()
+```
+
+The plot shows that unique clustering can be seen at north east of the area.
+To further investigate the clustering behaviour, use Ripley's K to measure the right magnitude for the clustering analysis (i.e. how far each clusters are located)
+
+```{r clustering_magnitude, echo=TRUE, message=FALSE, warning=FALSE}
+#Ripley's K
+K <- sqf_subset_ppp %>%
+  Kest(., correction = "border") %>%
+  plot() #shows that the points are clustered at any scale
+
+#Setting up the data for dbscan methods (dataframe)
+sqf_subset_df <- sqf_subset_sp %>%
+  coordinates(.) %>%
+  as.data.frame()
+
+#KNN distance plot
+sqf_subset_df %>% dbscan::kNNdistplot(., k=4) #at 4 nearest neighbour, 50m (micro cruster) or 600m (very big cluster that include most points in one district) -> inappropriate
+sqf_subset_df %>% dbscan::kNNdistplot(., k=10) #similar results at 10 nn
+sqf_subset_df %>% dbscan::kNNdistplot(., k=30) #similar results at 30 nn
+```
+
+Both Ripley's K and knn dist plot show that it is difficult to extract a magnitude at which distinct clusters are found.
+This may be due to a very high concentration of data points, which could be addressed in the future by choosing more specific incidents of SQF, such as at certain time of the day and/or for certain characteristics of suspects.
+
+Here, an arbitrary scale of 400 m is chosen to demonstrate the methodology for using cluster data for identifying certain spatial characteristics associated with 'falsely conducted' SQF:
+
+```{r DBSCAN, echo=TRUE, message=FALSE, warning=FALSE}
+#Running DBSCAN
+dbscan <- sqf_subset_df %>%
+  fpc::dbscan(., eps = 400, MinPts = 4)
+
+#Quickly visualising
+plot(dbscan, sqf_subset_df, main = "DBSCAN results for self-initiated SQF with no arrest", frame=F)
+plot(master_data_subset$geometry, add=T)
+
+#Save the results in df
+sqf_subset_df <- sqf_subset_df %>%
+  mutate(dbcluster = dbscan$cluster)
+```
+
+The quick output shows that there are 3\~4 major clusters at the DBSCAN scale of 400 m, which spans across police districts.
+These clusters are less likely to be related to individual police district's characteristics, as different offices are likely in charge.
+There are multiple other clusters identified across the area, which look to be located horizontally along the northern shore.
+It should be investigated in relation to the geographical characteristics of the space, which can be done by mapping the DBSCAN clustering output on a OSM basemap:
+
+```{r map_making, echo=TRUE, message=FALSE, warning=FALSE}
+#DBSCAN output with chulls
+chulls <- data.frame()
+for (cluster in 1:max(sqf_subset_df$dbcluster)) {
+  cluster_data <- sqf_subset_df %>%
+    filter(dbcluster == cluster)
+  ch <- chull(cluster_data$coords.x1, cluster_data$coords.x2)
+  chulls <- chulls %>%
+    bind_rows(cluster_data[c(ch), ])
+} 
+chulls <- chulls %>% filter(dbcluster>=1)
+
+#Add basemap to DBSCAN
+shape_bb <- master_data_subset %>%
+  st_transform(., 4326) %>% st_bbox()
+#shape_bb -> xmin = -74.04, ymin = 40.68, xmax = -73.91, ymax = 40.88
+basemap <- OpenStreetMap::openmap(c(40.68, -74.04), c(40.88, -73.91), zoom = NULL, "stamen-toner")
+basemap_NAD83 <- openproj(basemap, projection="+init=epsg:32118") #projecting the map to NAD83
+
+#Mapping the cluster results on the basemap
+main <- autoplot.OpenStreetMap(basemap_NAD83) +
+  geom_point(data = sqf_subset_df, aes(coords.x1, coords.x2, colour = dbcluster, fill=dbcluster))+
+  geom_polygon (data = chulls, aes(coords.x1, coords.x2, group=dbcluster, fill=dbcluster, alpha = 0.5))
+
+#Output the results
+main
+```
+
+The map shows that largest cluster is located north east of the Central Park (East and South Harlem).
+It also shows that many of other clusters are located near large roads: the second and the third largest clusters are located near the connecting bridges to other parts of NYC.
+In addition, there are many clusters and individual points along the Broadway Street.
+This suggests two possibilities for the clustering reasons: i.
+Large public spaces and roads attract more people, so officers tend to see more unusual behaviours and therefore initiate SQF.
+This naturally leads to high % of non-arrest SQF if the % of arrest is assumed to be similar across areas.
+ii.
+Large public spaces and roads tend to have more offices patrolling.
+This may be resulting in more self-initiated SQF.
+
+# Short summary
+
+To summarise the findings up to here:
+
+-   The north part of NYC has significantly high density of self-initiated SQF that did not result in an actual arrest.
+    Moran's I and Getis Ord analysis showed that there are statistically significant hostspots in this part, so this part was chosen for a deep dive.
+
+-   In very high proportion of these cases (\~50%), the suspects were black.
+    As the proportion of the black population in NYC is much lower than that, it is possible to hypothesize there may be some bias in police officers when they self-initiate SQF.
+
+-   Clustering analysis showed that many of the identified clusters are located near public spaces (i.e. certain side of a park, near major connecting bridges with other parts of NY, and major streets).
+    This information is not enough to conclude why clusters are tending to occur at these locations, but it is possible to hypothesize that these could be because of generally higher crime rates near these locations and high concentration of officers located nearby.
+
+-   Going forward, further analyses to verify these hypotheses should be conducted to verify whether the SQF cases are biased for certain characteristics of suspects (especially race), and why that might be (officers' bias, high population density of certain demographics in high crime rate area, etc.).
+    The results of this would be helpful in understanding how SQF policy can be improved to remove potential bias, and also to support certain demographics if significant discrepancy with addressable reasons is found.
+
+# Final output
+
+This section summarises major findings with visuals.
+
+The data points with self-initiated SQF that did not result in arrest are selected as the study target.
+This is to understand if there are spatial patterns and suspect characteristics pattern for unnecessary SQF (assuming that non-arrest cases = unnecessary SQF), which was conducted by an individual officer's judgment.
+
+Below bar chart shows that it is likely there is certain racial bias for unnecessary SQF.
+This signifies the importance of this study for improvement in SQF policy.
+
+```{r final_output_race, echo=TRUE, message=FALSE, warning=FALSE}
+#bar chart for racial breakdown
+ggbar
+```
+
+With above information in mind, spatial analysis of unnecessary SQF is conducted.
+The whole of NYC was investigated first to see if there are certain areas with hot spot, that spans across police district, as those are the pattern that needs investigation by the overlooking authority that is NYC police department.
+
+```{r NYC_wide_output, echo=TRUE, message=FALSE, warning=FALSE}
+#defining the bounding box for the deep-dive
+zoom <- master_data_subset %>% 
+  st_bbox() %>%
+  st_as_sfc()
+
+#density map for final output
+tm_density_2 <- tm_shape(master_data) +
+    tm_polygons("density", style="jenks", palette="PuBu",
+        midpoint=NA, title = "Unnecessary SQF/m^2")+
+  tm_shape(zoom)+ 
+  tm_borders(col = "grey40", lwd = 1.5)+
+  tm_credits("deep dive area", position = c(0.13, 0.4), size = 1.2)+ #explain what the box means
+  tm_layout(frame=FALSE,
+            bg.color = "transparent", title = "Density of unnecessary SQF", title.size = 1.2)
+
+#General G map for final output
+tm_general_2 <- tm_shape(master_data)+
+  tm_polygons("density_Gz", style = "fixed", breaks = breaks, 
+              palette = GeneralColours, midpoint=NA, title = "Z score")+
+  tm_shape(zoom)+ 
+  tm_borders(col = "grey40", lwd = 3)+
+  tm_compass(north=0, position=c(0.85, 0.75))+
+  tm_layout(frame=FALSE,
+            bg.color = "transparent", title = "Getis Ord General G", title.size = 1.2)
+
+#Moran's I map for final output
+tm_moran_2 <- tm_shape(master_data)+
+  tm_polygons("density_Iz", style = "fixed", breaks = breaks, 
+              palette = MoranColours, midpoint=NA, title = "Z score")+
+  tm_scale_bar(position=c(0.5, 0.07))+
+  tm_credits("Data from: NYPD (2019)", position = c(0.5, 0.))+
+  tm_shape(zoom)+ 
+  tm_borders(col = "grey40", lwd = 3)+
+  tm_layout(frame=FALSE,
+            bg.color = "transparent", title = "Moran's I", title.size = 1.2)
+
+tmap_mode("plot")
+tmap_arrange(tm_density_2, tm_general_2, tm_moran_2, ncol=2)
+```
+
+The density map shows that unnecessary SQF have higher density in the north part of NYC and center of bottom island.
+Getis Ord and Moran's I confirm that the nort part of NYC is exhibiting high degree of autocorrelation with high density values.
+
+The deep dive into these areas (bounded by gray box) are then conducted with DBSCAN.
+Arbitrary chosen scale of 200 m from a point to define a cluster, some major clusters and smaller clustter patterns are identified and mapped on a base map:
+
+```{r clustering_output, echo=TRUE, message=FALSE, warning=FALSE}
+#Mapping the cluster results together
+main <- autoplot.OpenStreetMap(basemap_NAD83) +
+  geom_point(data = sqf_subset_df, aes(coords.x1, coords.x2, colour = dbcluster, fill=dbcluster))+
+  geom_polygon (data = chulls, aes(coords.x1, coords.x2, group=dbcluster, fill=dbcluster, alpha = 0.5))
+
+main
+```
+
+This output shows that there are two distinct types of clusters: one is large cluster type, exemplified by north-east side of the Central Park and around the bridges connecting to Brooklyn; the other is smaller cluster type located along a major road such as the Broadway.
+
+These findings show that there are distinct patterns both in terms of suspect characteristics and spatial patterns.
+In order to utilise this analysis result for policy improvement, further analyses are essential in finding out the reasons behind these patterns in unnecessary SQF.
+The author suggests below analyses as the next steps:
+
+A. Identify why unnecessary SQF occurs near large public spaces and along major streets.
+This can be done through using data such as necessary SQF (resulted in arrest), crime rate, and police-officer location, and finding out which of the aspect is correlated with the unnecessary SQF frequency.
+
+B. Identify why certain characteristics of suspects are likely to experience unnecessary SQF.
+Exploring the frequency of unnecessary SQF experienced by certain demographics and the discrepancy compared to the overall population in terms of time of the day, police officer characteristics, and spatial locations would be useful.
+
+C. Based on #A and #B, identify improvement in SQF policy that can reduce the attribute and location bias in unnecessary SQF.
+These results can be utilised in creating a policing plan like the one by Cleveland (<https://www.apccs.police.uk/media/5381/pcc-crime-plan-2018-2020-spread-high-res.pdf>), and could include police officer education, stricter reporting policy, and police accountability as well as investment in an improvement of certain locations in NYC.
+
+Other analyses to recommend include finding out how 'accurate' SQF is at certain police district by conducting autocorrelation analysis (section 3) with (# of unnecessary SQF/ \# of all SQF), and potentially conducting regression analyses with factors such as socioeconomic factors of residents, police officer characteristics, and frequency of visitors.
